@@ -10,7 +10,15 @@ require('dotenv').config();
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+
+const corsOptions ={
+    origin:`${process.env.Frontend_URL}`, 
+    credentials:true,      
+    methods:['GET','POST','PUT','DELETE']
+}
+
+
+app.use(cors(corsOptions));
 
 const userSchema = zod.object({
     username : zod.string().min(1),
