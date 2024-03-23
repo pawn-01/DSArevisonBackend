@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { boolean } = require('zod');
 const {Schema} = mongoose;
 
 const userSchema = new Schema({
@@ -16,7 +17,8 @@ const userSchema = new Schema({
         type: String,
         required: true,
         min: 6
-    }
+    },
+    verify:Boolean
 })
 
 const dsaSchema = new Schema({
@@ -31,7 +33,15 @@ const dsaSchema = new Schema({
     }
 })
 
+const userotpschema = new Schema({
+    userId:String,
+    otp:String,
+    createdAt:Date,
+    expireAt:Date
+})
+
 const Dsa = mongoose.model('Dsa',dsaSchema);
 const User = mongoose.model('DsaRevisionUser',userSchema);
+const userotp = mongoose.model("UserOtp",userotpschema);
 
-module.exports = {Dsa,User};
+module.exports = {Dsa,User,userotp};

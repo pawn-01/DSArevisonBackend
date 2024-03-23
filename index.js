@@ -1,12 +1,23 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const zod = require('zod');
-const {Dsa, User} = require('./db');
+const {Dsa, User, userotp} = require('./db');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require("jsonwebtoken");
 const authMiddleware = require('./authMiddleware');
+const nodemailer = require("nodemailer");
 require('dotenv').config();
+
+const transporter = nodemailer.createTransport({
+    service:'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    auth: {
+        user:process.env.EMAIL,
+        pass:process.env.Pass
+    }
+});
 
 const app = express();
 app.use(express.json());
@@ -26,7 +37,6 @@ const userSchema = zod.object({
     password : zod.string().min(6)
 })
 
-const jwtSecretKey = "hggfdgffxfdgrs77888";
 const salt = bcrypt.genSaltSync(10);
 
 
@@ -50,6 +60,7 @@ app.post('/signup', async function(req, res, next){
             username,
             email,
             password :bcrypt.hashSync(password,salt),
+            verify:false,
         })
         await newUser.save();
     
@@ -81,8 +92,34 @@ app.post('/login', async function(req, res, next){
 
         if(!passwordVerify) return res.json({msg: "Incorrect password",a:0});
 
-        const token = jwt.sign({username:user.username,id:user._id},process.env.JWT_SECRET_KEY);
+        const token = jwt.sign({username:user.username,email,id:user._id},process.env.JWT_SECRET_KEY);
         console.log("token is here:",token);
+
+        if(!user.verify){
+        const otp = `${Math.floor(1000 + Math.random()*9000)}`;
+
+        const mailoption = {
+             from:{
+                name:"Revision Labs",
+                address:process.env.EMAIL
+            },
+             to:email,
+             subject:"Verify  your Email",
+             html:`<p>Enter your otp <b>${otp}</b> to verify your email address and complete</p><p>This otp expires in 10min </p>`
+        }
+       
+        const hasedotp = await bcrypt.hash(otp,salt);
+        await userotp.deleteMany({userId:user._id});
+
+        await userotp.create({
+            userId:user._id,
+            otp:hasedotp,
+            createdAt:Date.now(),
+            expireAt:Date.now()+600000,
+        })
+
+        await transporter.sendMail(mailoption);
+        }
 
         return res.json({msg: "login successful",token:token,a:1,user:{id:user._id,name:user.username}});
     }
@@ -208,5 +245,101 @@ app.post('/profile',authMiddleware,async(req,res)=>{
          }
 })
 
+app.post('/verify',authMiddleware,async(req,res)=>{
+    console.log("id hai" + req.user.id);
+    try{
+     const userdoc = await User.find({email:req.user.email})
+     console.log("verify kro "+ userdoc[0].verify);
 
-app.listen(3000);
+     if(userdoc[0].verify){
+         res.json({username:userdoc[0].username,a:1});
+     }
+     else{
+        res.json({a:0})
+     }
+    }
+    catch(e){
+
+    }
+})
+
+app.post('/otpsend',authMiddleware,async(req,res)=>{
+    try{
+        console.log("verify "+req.user.email)
+        const otp = `${Math.floor(1000 + Math.random()*9000)}`;
+
+        const mailoption = {
+             from:{
+                name:"Revison Labs",
+                address:process.env.EMAIL
+            },
+             to:req.user.email,
+             subject:"Verify  your Email",
+             html:`<p>Enter your otp <b>${otp}</b> to verify your email address and complete</p><p>This otp expires in 10min </p>`
+        }
+       
+        const hasedotp = await bcrypt.hash(otp,salt);
+        await userotp.deleteMany({userId:req.user.id});
+
+        await userotp.create({
+            userId:req.user.id,
+            otp:hasedotp,
+            createdAt:Date.now(),
+            expireAt:Date.now()+600000,
+        })
+
+        await transporter.sendMail(mailoption);
+
+        res.json({msg:"otp send check your mail ", a:1})
+    }
+    catch(e){
+        console.log(e)
+        res.status(400).json({msg:"some issue on server",e})
+    }
+    
+})
+
+app.post('/verifyotp',authMiddleware,async(req,res)=>{
+     console.log("id" + req.user.id);
+      try{
+         const { otp } = req.body;
+         if(!otp){
+            return res.json({msg:"Plese fill the otp ",a:0});
+         }
+         
+         const userotpdoc = await userotp.find({
+            userId:req.user.id
+         })
+
+         if(userotpdoc.length <= 0){
+             return res.json({msg:"Account record does not exist.plese go to sin up or login page",a:0})
+         }
+         
+         const {expireAt} = userotpdoc[0];
+         const hasedotp = userotpdoc[0].otp;
+
+         if(expireAt < Date.now()){
+              res.json({msg:"code expire click on resend",a:0});
+         }
+         else{
+            const validotp = await bcrypt.compare(otp,hasedotp);
+            if(!validotp){
+                  return res.json({msg:"otp is not valid" , a:0});
+            }
+            else{
+                const a = await User.updateOne({ _id:req.user.id,email:req.user.email},{ $set: { verify:true }});
+
+                console.log(a);
+                await userotp.deleteMany({userId:req.user.id});
+
+                return res.json({msg:"verifed",a:1});
+            }
+         }
+      }
+      catch(e){
+        console.log(e);
+        res.status(400).json({e,msg:"server issue"});
+      }
+})
+
+app.listen(4000);
