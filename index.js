@@ -141,15 +141,29 @@ app.post('/add',authMiddleware, async function(req,res,next){
         
         //if the user is authenticated add question
         if(!question.safeParse(req.body).success){
-            return res.json({message:"Please fill envery column correctly and check url is correct",a:0})
+            return res.json({message:"Please fill every column correctly and check URL is correct",a:0})
         }
         const decodedData = req.user;
         console.log("decoded data:",decodedData);
+        const arr = title.split(" ");
+        const arr2 = tags.split(" ");
+        let qtitle = "";
+        let qtags = "";
+
+        for(let i = 0 ; i<arr.length ; i++){
+            qtitle += arr[i].charAt(0).toUpperCase() + arr[i].slice(1)+" ";
+        } 
+
+        for(let i = 0 ; i<arr2.length ; i++){
+            qtags += arr2[i].charAt(0).toUpperCase() + arr2[i].slice(1)+" ";
+        } 
+
+        console.log(qtitle);
 
         const addquestion = await Dsa.create({
-            title,
+            title:qtitle,
             url,
-            tags,
+            tags:qtags,
             difficulty,
             revisionCount: 0,
             author: decodedData.id,
@@ -270,7 +284,7 @@ app.post('/otpsend',authMiddleware,async(req,res)=>{
 
         const mailoption = {
              from:{
-                name:"Revison Labs",
+                name:"Revision Labs",
                 address:process.env.EMAIL
             },
              to:req.user.email,
