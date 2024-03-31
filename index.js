@@ -68,7 +68,7 @@ app.post('/signup', async function(req, res, next){
     }
     catch(err){
        // console.log("error while signing up",err);
-        return res.json({msg:"you have an account so login",a:0});
+        return res.json({msg:"Account already exist, try login",a:0});
     }
 })
 
